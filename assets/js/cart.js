@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <button class="increase-btn" data-index="${index}">+</button>
                         </div>
                         <p>Total = ${(item.price * item.quantity).toFixed(2)} EGP </p>
+                        <button class="remove-btn" data-index="${index}">Remove</button>
                     </div>
                 `;
                 cartItemsContainer.appendChild(itemElement);
@@ -74,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
         displayCartItems();
     });
 
-    /* معالج النقر على أزرار + و- */
+    /* معالج النقر على أزرار + و- وRemove */
     cartItemsContainer.addEventListener("click", (e) => {
         if (e.target.classList.contains("increase-btn")) {
             const index = e.target.dataset.index;
@@ -87,6 +88,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (cartItems[index].quantity <= 0) {
                 cartItems.splice(index, 1);
             }
+            localStorage.setItem("cartItems", JSON.stringify(cartItems));
+            displayCartItems();
+        } else if (e.target.classList.contains("remove-btn")) {
+            const index = e.target.dataset.index;
+            cartItems.splice(index, 1);
             localStorage.setItem("cartItems", JSON.stringify(cartItems));
             displayCartItems();
         }
@@ -102,34 +108,84 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     /* معالج إرسال نموذج الدفع */
-    paymentForm.addEventListener("submit", (e) => {
+    paymentForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const name = document.querySelector("#name").value;
-        const address = document.querySelector("#address").value;
-        const email = document.querySelector("#email").value;
-        const card = document.querySelector("#card").value;
-        const cvv = document.querySelector("#cvv").value;
 
-        // هنا يمكنك إضافة منطق لمعالجة بيانات الدفع (مثل إرسالها إلى خادم)
-        console.log("Payment Details:", { name, address, email, card, cvv });
+        const name = document.querySelector("#name").value.trim();
+        const address = document.querySelector("#address").value.trim();
+        const email = document.querySelector("#email").value.trim();
+        const card = document.querySelector("#card").value.trim();
+        const cvv = document.querySelector("#cvv").value.trim();
 
-        // إظهار نافذة الدفع الناجح
-        document.querySelector("#success-popup").style.display = "flex";
+        // التحقق من البيانات
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!name) {
+            alert("Please enter your name.");
+            return;
+        }
+        if (!address) {
+            alert("Please enter your address.");
+            return;
+        }
+        if (!email || !emailRegex.test(email)) {
+            alert("Please enter a valid email.");
+            return;
+        }
+        if (!card || card.length < 16) {
+            alert("Please enter a valid card number (at least 16 digits).");
+            return;
+        }
+        if (!cvv || cvv.length < 3) {
+            alert("Please enter a valid CVV (at least 3 digits).");
+            return;
+        }
 
-        // إفراغ العربة بعد الدفع
-        cartItems = [];
-        localStorage.setItem("cartItems", JSON.stringify(cartItems));
-        displayCartItems();
+        // إرسال بيانات الطلب للخادم
+        const totalPrice = totalPriceElement.textContent;
+        const orderData = {
+            user_id: JSON.parse(sessionStorage.getItem("user"))?.id || 1, // افتراضي لو مفيش مستخدم
+            total_price: totalPrice,
+            name: name,
+            address: address,
+            email: email,
+            cart_items: cartItems
+        };
 
-        // إغلاق نافذة الدفع
-        checkoutPopup.style.display = "none";
-        paymentForm.reset(); // إعادة تعيين النموذج
+        try {
+            const response = await fetch("../api/place_order.php", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(orderData)
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                // إظهار نافذة الدفع الناجح
+                document.querySelector("#success-popup").style.display = "flex";
+
+                // إفراغ العربة بعد الدفع
+                cartItems = [];
+                localStorage.setItem("cartItems", JSON.stringify(cartItems));
+                displayCartItems();
+
+                // إغلاق نافذة الدفع
+                checkoutPopup.style.display = "none";
+                paymentForm.reset();
+            } else {
+                alert("Error placing order: " + result.message);
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            alert("An error occurred while placing the order.");
+        }
     });
 
     /* معالج النقر على زر Cancel */
     cancelCheckout.addEventListener("click", () => {
-        checkoutPopup.style.display = "none"; // إغلاق النافذة المنبثقة
-        paymentForm.reset(); // إعادة تعيين النموذج
+        checkoutPopup.style.display = "none";
+        paymentForm.reset();
     });
 
     /* معالج النقر على زر "موافق" في نافذة الدفع الناجح */

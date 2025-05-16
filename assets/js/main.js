@@ -43,3 +43,6 @@ window.onscroll = function (){
             top: 0,
         });
 }
+
+// AOS
+AOS.init();
